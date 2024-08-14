@@ -12,7 +12,7 @@ pub enum Error {
     CheckError(#[from] RancorError),
 }
 
-use core::{marker::PhantomData, ops::Deref};
+use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
 use tokio_util::{
     bytes::BytesMut,
@@ -174,43 +174,21 @@ where
     }
 }
 
-#[derive(Default)]
-struct BytesWriter {
-    bytes: BytesMut,
-}
-
-use rkyv::ser::{Positional, Writer};
-
-impl Positional for BytesWriter {
-    fn pos(&self) -> usize {
-        self.bytes.len()
-    }
-}
-
-impl<E> Writer<E> for BytesWriter {
-    fn write(&mut self, bytes: &[u8]) -> Result<(), E> {
-        self.bytes.extend_from_slice(bytes);
-        Ok(())
-    }
-}
-
 impl<T> Encoder<T> for RkyvCodec<T>
 where
-    T: for<'a> Serialize<HighSerializer<'a, BytesWriter, ArenaHandle<'a>, RancorError>>,
+    T: for<'a> Serialize<HighSerializer<'a, Vec<u8>, ArenaHandle<'a>, RancorError>>,
 {
     type Error = Error;
 
     fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let writer = rkyv::api::high::to_bytes_in_with_alloc(
             &item,
-            BytesWriter::default(),
+            Vec::with_capacity(size_of::<Archived<T>>()),
             self.arena.acquire(),
         )?;
 
         self.arena.shrink();
 
-        self.inner
-            .encode(writer.bytes.freeze(), dst)
-            .map_err(Error::from)
+        self.inner.encode(writer.into(), dst).map_err(Error::from)
     }
 }
