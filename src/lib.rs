@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(feature = "codec"), no_std)]
 #![doc = include_str!("../README.md")]
 
 #[doc(hidden)]
