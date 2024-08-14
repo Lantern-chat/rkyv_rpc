@@ -14,7 +14,7 @@ categories = ["no-std", "encoding"]
 [features]
 default = ["codec"]
 unaligned = ["rkyv/unaligned"]
-codec = ["tokio-util/codec", "dep:thiserror"]
+codec = ["tokio-util/codec", "dep:thiserror", "rkyv/std"]
 
 [dependencies]
 paste = "1.0.15"
