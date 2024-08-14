@@ -1,6 +1,6 @@
 [package]
 name = "rkyv_rpc"
-version = "0.0.0-alpha.0"
+version = "0.0.1-beta.1"
 edition = "2021"
 description = "Helpers for defining an RPC protocol using rkyv"
 authors = ["Nova <novacrazy@gmail.com>"]
