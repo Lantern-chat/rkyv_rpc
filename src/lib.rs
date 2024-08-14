@@ -73,7 +73,7 @@ macro_rules! rpc_enum {
             $($(#[$variant_meta:meta])* $code:literal = $variant:ident($ty:ty),)*
         }
     ) => {paste::paste! {
-        $vis use self::[<$name:snake _impl>]::{$name, [<$name Resolver>], [<Archived $name>]};
+        $vis use [<$name:snake _impl>]::{$name, [<$name Resolver>], [<Archived $name>]};
 
         mod [<$name:snake _impl>] {
             #[allow(unused_imports)]

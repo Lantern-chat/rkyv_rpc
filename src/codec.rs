@@ -206,3 +206,80 @@ where
         self.inner.encode(writer.into(), dst).map_err(Error::from)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::HashMap,
+        io::{Cursor, Seek},
+    };
+
+    use super::*;
+
+    #[derive(rkyv::Archive, rkyv::Serialize, PartialEq, Debug)]
+    #[archive(check_bytes)]
+    struct Test {
+        a: u32,
+        b: HashMap<i64, String>,
+        c: u128,
+    }
+
+    #[test]
+    fn test_codec() {
+        let data = Test {
+            a: 42,
+            b: {
+                let mut b = HashMap::new();
+                b.insert(1, "hello".to_string());
+                b.insert(2, "world".to_string());
+                b
+            },
+            c: 1234567890,
+        };
+
+        let mut codec = RkyvCodec::<Test>::default();
+        let mut buf = BytesMut::new();
+
+        codec.encode(&data, &mut buf).unwrap();
+
+        let decoded = codec.decode(&mut buf).unwrap().unwrap();
+
+        assert_eq!(decoded.a, 42);
+        assert_eq!(decoded.b.get(&1.into()).unwrap(), "hello");
+        assert_eq!(decoded.b.get(&2.into()).unwrap(), "world");
+        assert_eq!(decoded.c, 1234567890);
+    }
+
+    #[tokio::test]
+    async fn test_framed() {
+        use futures_util::{SinkExt, StreamExt};
+
+        let data = Test {
+            a: 42,
+            b: {
+                let mut b = HashMap::new();
+                b.insert(1, "hello".to_string());
+                b.insert(2, "world".to_string());
+                b
+            },
+            c: 1234567890,
+        };
+
+        let mut io = Cursor::new(Vec::new());
+
+        let codec = RkyvCodec::<Test>::default();
+
+        let mut framed = codec.framed(&mut io);
+
+        framed.send(&data).await.unwrap();
+
+        framed.get_mut().rewind().unwrap();
+
+        let decoded = framed.next().await.unwrap().unwrap();
+
+        assert_eq!(decoded.a, 42);
+        assert_eq!(decoded.b.get(&1.into()).unwrap(), "hello");
+        assert_eq!(decoded.b.get(&2.into()).unwrap(), "world");
+        assert_eq!(decoded.c, 1234567890);
+    }
+}

@@ -26,5 +26,10 @@ version = "0.8.0-alpha.3"
 default-features = false
 features = ["bytecheck", "alloc"]
 
+[dev-dependencies.rkyv]
+version = "0.8.0-alpha.3"
+default-features = true
+
 [dev-dependencies]
-rkyv = "0.8.0-alpha.3" # for the default features
+futures-util = { version = "0.3.30", features = ["sink"] }
+tokio = { version = "1", features = ["full"] }
