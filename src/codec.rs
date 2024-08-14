@@ -24,6 +24,7 @@ use rkyv::{
     bytecheck::CheckBytes,
     rancor::Error as RancorError,
     ser::allocator::{Arena, ArenaHandle},
+    util::AlignedVec,
     validation::{archive::ArchiveValidator, shared::SharedValidator, Validator},
     Archive, Archived, Serialize,
 };
@@ -31,7 +32,7 @@ use rkyv::{
 /// Zero-cost wrapper around an rkyv archive that has been checked for validity.
 pub struct CheckedArchive<T> {
     _marker: std::marker::PhantomData<T>,
-    bytes: rkyv::util::AlignedVec,
+    aligned: rkyv::util::AlignedVec,
     pos: usize,
 }
 
@@ -44,7 +45,7 @@ where
     fn deref(&self) -> &Self::Target {
         // SAFETY: This is safe because the buffer is aligned and the root type
         // was checked when when it was decoded.
-        unsafe { rkyv::api::access_pos_unchecked(&self.bytes, self.pos) }
+        unsafe { rkyv::api::access_pos_unchecked(&self.aligned, self.pos) }
     }
 }
 
@@ -129,22 +130,23 @@ where
         return Ok(None);
     };
 
-    let mut aligned = rkyv::util::AlignedVec::with_capacity(bytes.len());
+    // copy over bytes to ensure alignment
+    let mut aligned = AlignedVec::with_capacity(bytes.len());
     aligned.extend_from_slice(&bytes);
 
-    let pos = rkyv::api::root_position::<Archived<T>>(bytes.len());
+    let pos = rkyv::api::root_position::<Archived<T>>(aligned.len());
 
     // rkyv::access but without the actual access
     rkyv::api::check_pos_with_context::<Archived<T>, _, RancorError>(
         &aligned,
         pos,
-        &mut Validator::new(ArchiveValidator::new(&bytes), SharedValidator::new()),
+        &mut Validator::new(ArchiveValidator::new(&aligned), SharedValidator::new()),
     )?;
 
     Ok(Some(CheckedArchive {
         _marker: PhantomData,
-        bytes: aligned,
-        pos, // it's unlikely pos won't be 0, but store it anyway
+        aligned,
+        pos,
     }))
 }
 
@@ -174,15 +176,15 @@ where
     }
 }
 
-impl<T> Encoder<T> for RkyvCodec<T>
+impl<T> Encoder<&T> for RkyvCodec<T>
 where
     T: for<'a> Serialize<HighSerializer<'a, Vec<u8>, ArenaHandle<'a>, RancorError>>,
 {
     type Error = Error;
 
-    fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: &T, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let writer = rkyv::api::high::to_bytes_in_with_alloc(
-            &item,
+            item,
             Vec::with_capacity(size_of::<Archived<T>>()),
             self.arena.acquire(),
         )?;
