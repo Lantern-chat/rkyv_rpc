@@ -207,10 +207,10 @@ where
             self.arena.acquire(),
         )?;
 
-        self.inner.encode(writer.bytes.freeze(), dst)?;
+        self.arena.shrink();
 
-        self.arena.shrink(); // cleanup
-
-        Ok(())
+        self.inner
+            .encode(writer.bytes.freeze(), dst)
+            .map_err(Error::from)
     }
 }
