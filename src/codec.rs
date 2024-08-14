@@ -24,7 +24,6 @@ use rkyv::{
     bytecheck::CheckBytes,
     rancor::Error as RancorError,
     ser::allocator::{Arena, ArenaHandle},
-    util::AlignedVec,
     validation::{archive::ArchiveValidator, shared::SharedValidator, Validator},
     Archive, Archived, Serialize,
 };
@@ -32,7 +31,13 @@ use rkyv::{
 /// Zero-cost wrapper around an rkyv archive that has been checked for validity.
 pub struct CheckedArchive<T> {
     _marker: std::marker::PhantomData<T>,
-    aligned: rkyv::util::AlignedVec,
+
+    #[cfg(not(feature = "unaligned"))]
+    bytes: rkyv::util::AlignedVec,
+
+    #[cfg(feature = "unaligned")]
+    bytes: tokio_util::bytes::Bytes,
+
     pos: usize,
 }
 
@@ -45,7 +50,7 @@ where
     fn deref(&self) -> &Self::Target {
         // SAFETY: This is safe because the buffer is aligned and the root type
         // was checked when when it was decoded.
-        unsafe { rkyv::api::access_pos_unchecked(&self.aligned, self.pos) }
+        unsafe { rkyv::api::access_pos_unchecked(&self.bytes, self.pos) }
     }
 }
 
@@ -126,26 +131,33 @@ where
     T: Archive,
     Archived<T>: for<'a> CheckBytes<HighValidator<'a, RancorError>>,
 {
-    let Some(bytes) = inner.decode(src)? else {
-        return Ok(None);
+    let bytes = match inner.decode(src)? {
+        None => return Ok(None),
+
+        #[cfg(feature = "unaligned")]
+        Some(bytes) => bytes.freeze(),
+
+        #[cfg(not(feature = "unaligned"))]
+        Some(bytes) => {
+            // copy over bytes to ensure alignment
+            let mut aligned = rkyv::util::AlignedVec::with_capacity(bytes.len());
+            aligned.extend_from_slice(&bytes);
+            aligned
+        }
     };
 
-    // copy over bytes to ensure alignment
-    let mut aligned = AlignedVec::with_capacity(bytes.len());
-    aligned.extend_from_slice(&bytes);
-
-    let pos = rkyv::api::root_position::<Archived<T>>(aligned.len());
+    let pos = rkyv::api::root_position::<Archived<T>>(bytes.len());
 
     // rkyv::access but without the actual access
     rkyv::api::check_pos_with_context::<Archived<T>, _, RancorError>(
-        &aligned,
+        &bytes,
         pos,
-        &mut Validator::new(ArchiveValidator::new(&aligned), SharedValidator::new()),
+        &mut Validator::new(ArchiveValidator::new(&bytes), SharedValidator::new()),
     )?;
 
     Ok(Some(CheckedArchive {
         _marker: PhantomData,
-        aligned,
+        bytes,
         pos,
     }))
 }

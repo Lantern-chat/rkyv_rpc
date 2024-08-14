@@ -13,6 +13,7 @@ categories = ["no-std", "encoding"]
 
 [features]
 default = ["codec"]
+unaligned = ["rkyv/unaligned"]
 codec = ["tokio-util/codec", "dep:thiserror"]
 
 [dependencies]
