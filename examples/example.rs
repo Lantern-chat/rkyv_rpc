@@ -1,6 +1,6 @@
 fn main() {}
 
-rkyv_rpc::rpc_enum! {
+rkyv_rpc::tuple_enum! {
     pub enum Example: u16 {
         0 = A(u8),
         1 = B(u16),

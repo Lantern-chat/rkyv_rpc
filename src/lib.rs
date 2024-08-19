@@ -42,8 +42,8 @@ macro_rules! __rkyv_rpc_helper {
     (@CAST u32) => { u64 };
 }
 
-/// Implements [`rkyv::Archive`], [`rkyv::Serialize`], and [`rkyv::Deserialize`] for an enum
-/// for such a way as to be endianness-agnostic.
+/// Implements [`rkyv::Archive`], [`rkyv::Serialize`], and [`rkyv::Deserialize`] for a 1-tuple enum
+/// in such a way as to be endianness-agnostic.
 ///
 /// If the repr is u8, the enum will have a native u8 repr. However,
 /// if the repr is u16 or u32, the enum will be represented as a u32 or u64, respectively,
@@ -57,7 +57,7 @@ macro_rules! __rkyv_rpc_helper {
 ///
 /// # Example
 /// ```rust
-/// rkyv_rpc::rpc_enum! {
+/// rkyv_rpc::tuple_enum! {
 ///     pub enum Example: u16 {
 ///         0 = A(u8),
 ///         1 = B(u16),
@@ -66,7 +66,7 @@ macro_rules! __rkyv_rpc_helper {
 /// }
 /// ```
 #[macro_export]
-macro_rules! rpc_enum {
+macro_rules! tuple_enum {
     (
         $(#[$meta:meta])*
         $vis:vis enum $name:ident: $repr:ty {
@@ -115,6 +115,7 @@ macro_rules! rpc_enum {
             $crate::__rkyv_rpc_helper! {
                 @REPR $repr
                 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+
                 pub enum ArchivedTag {
                     $($variant = $crate::__rkyv_rpc_helper!(@MIRROR $repr $code),)*
                 }
@@ -127,6 +128,7 @@ macro_rules! rpc_enum {
 
             $crate::__rkyv_rpc_helper! {
                 @REPR $repr
+                #[doc = "Archived version of `" $name "`"]
                 pub enum [<Archived $name>] {
                     $($variant(Archived<Box<$ty>>) = ArchivedTag::$variant as _,)*
                 }
@@ -201,6 +203,109 @@ macro_rules! rpc_enum {
                             })?;
                         },)*
 
+                        invalid_discriminant => return Err(<<C as Fallible>::Error as Source>::new(InvalidEnumDiscriminantError {
+                            enum_name: stringify!([<Archived $name>]),
+                            invalid_discriminant,
+                        })),
+                    })
+                }
+            }
+        }
+    }};
+}
+
+/// Implements [`rkyv::Archive`], [`rkyv::Serialize`], and [`rkyv::Deserialize`] for an unit enum
+/// in such a way as to be endianness-agnostic.
+///
+/// This is similar to [`tuple_enum!`], but for unit enums. `rkyv` naturally only
+/// supports `u8` discriminants with its derive macros, so this macro is necessary to
+/// support larger endianness-agnostic discriminants.
+///
+/// # Example
+/// ```rust
+///rkyv_rpc::unit_enum! {
+///     /// An example unit enum
+///     pub enum Example: u16 {
+///         0 = A,
+///         1 = B,
+///         2 = C,
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! unit_enum {
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident: $repr:ty {
+            $($(#[$variant_meta:meta])* $code:literal = $variant:ident,)*
+        }
+    ) => {paste::paste! {
+        mod [<$name:snake _impl>] {
+            $(#[$meta])*
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            #[repr($repr)]
+            $vis enum $name {
+                $($(#[$variant_meta])* $variant = $code,)*
+            }
+
+            use $crate::rkyv::{Archive, Serialize, Deserialize, Portable};
+            use $crate::rkyv::place::{Place, Initialized};
+            use $crate::rkyv::bytecheck::{CheckBytes, InvalidEnumDiscriminantError};
+            use $crate::rkyv::rancor::{Fallible, Source};
+
+            $crate::__rkyv_rpc_helper! {
+                @REPR $repr
+                #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+                pub enum [<Archived $name>] {
+                    $($variant = $crate::__rkyv_rpc_helper!(@MIRROR $repr $code),)*
+                }
+            }
+
+            #[allow(non_upper_case_globals)]
+            impl [<Archived $name>] {
+                $(const [<$variant Discriminant>]: $crate::__rkyv_rpc_helper!(@CAST $repr) = [<Archived $name>]::$variant as _;)*
+            }
+
+            // SAFETY: This is safe because the tags are mirrored and endianness is preserved
+            unsafe impl Portable for [<Archived $name>] {}
+            unsafe impl Initialized for [<Archived $name>] {}
+
+            impl Archive for $name {
+                type Archived = [<Archived $name>];
+                type Resolver = ();
+
+                #[inline]
+                fn resolve(&self, _: Self::Resolver, out: Place<Self::Archived>) {
+                    match *self {
+                        $($name::$variant => out.write([<Archived $name>]::$variant),)*
+                    }
+                }
+            }
+
+            impl<S: Fallible + ?Sized> Serialize<S> for $name {
+                #[inline]
+                fn serialize(&self, _: &mut S) -> Result<(), S::Error> {
+                    Ok(())
+                }
+            }
+
+            impl<D: Fallible + ?Sized> Deserialize<$name, D> for [<Archived $name>] {
+                #[inline]
+                fn deserialize(&self, _: &mut D) -> Result<$name, D::Error> {
+                    Ok(match *self {
+                        $(<[<Archived $name>]>::$variant => $name::$variant,)*
+                    })
+                }
+            }
+
+            unsafe impl<C> CheckBytes<C> for [<Archived $name>]
+            where
+                C: Fallible + ?Sized,
+                <C as Fallible>::Error: Source,
+            {
+                unsafe fn check_bytes(value: *const Self, _: &mut C) -> Result<(), <C as Fallible>::Error> {
+                    Ok(match *value.cast::<$crate::__rkyv_rpc_helper!(@CAST $repr)>() {
+                        $([<Archived $name>]::[<$variant Discriminant>] => (),)*
                         invalid_discriminant => return Err(<<C as Fallible>::Error as Source>::new(InvalidEnumDiscriminantError {
                             enum_name: stringify!([<Archived $name>]),
                             invalid_discriminant,

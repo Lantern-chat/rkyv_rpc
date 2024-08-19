@@ -123,7 +123,7 @@ impl<T> From<LengthDelimitedCodec> for RkyvCodec<T> {
     }
 }
 
-fn decode<T>(
+fn decode_owned<T>(
     inner: &mut LengthDelimitedCodec,
     src: &mut BytesMut,
 ) -> Result<Option<CheckedArchive<T>>, Error>
@@ -171,7 +171,7 @@ where
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        decode(&mut self.inner, src)
+        decode_owned(&mut self.inner, src)
     }
 }
 
@@ -184,7 +184,7 @@ where
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        decode(&mut self.inner, src)
+        decode_owned(&mut self.inner, src)
     }
 }
 
