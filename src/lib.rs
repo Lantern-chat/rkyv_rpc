@@ -4,10 +4,15 @@
 #[doc(hidden)]
 pub extern crate alloc;
 #[doc(hidden)]
+pub extern crate paste;
+#[doc(hidden)]
 pub extern crate rkyv;
 
 #[cfg(feature = "codec")]
 pub mod codec;
+
+#[cfg(feature = "bitflags")]
+pub mod bitflags;
 
 #[doc(hidden)]
 pub mod private {
@@ -42,6 +47,8 @@ macro_rules! __rkyv_rpc_helper {
     (@CAST u32) => { u64 };
 }
 
+// TODO: Palindrome
+
 /// Implements [`rkyv::Archive`], [`rkyv::Serialize`], and [`rkyv::Deserialize`] for a 1-tuple enum
 /// in such a way as to be endianness-agnostic.
 ///
@@ -59,9 +66,9 @@ macro_rules! __rkyv_rpc_helper {
 /// ```rust
 /// rkyv_rpc::tuple_enum! {
 ///     pub enum Example: u16 {
-///         0 = A(u8),
-///         1 = B(u16),
-///         2 = C(u32),
+///         1000 = A(u8),
+///         1001 = B(u16),
+///         1002 = C(String),
 ///     }
 /// }
 /// ```
@@ -72,7 +79,7 @@ macro_rules! tuple_enum {
         $vis:vis enum $name:ident: $repr:ty {
             $($(#[$variant_meta:meta])* $code:literal = $variant:ident($ty:ty),)*
         }
-    ) => {paste::paste! {
+    ) => {$crate::paste::paste! {
         $vis use [<$name:snake _impl>]::{$name, [<$name Resolver>], [<Archived $name>]};
 
         mod [<$name:snake _impl>] {
@@ -222,13 +229,24 @@ macro_rules! tuple_enum {
 /// support larger endianness-agnostic discriminants.
 ///
 /// # Example
+///
+/// This fails because rkyv forces a u8 repr for the archived discriminant:
+/// ```rust,compile_fail
+/// #[derive(rkyv::Archive)]
+/// pub enum Example {
+///    A = 1000,
+///    B = 1001,
+///    C = 1002,
+/// }
+/// ```
+///
+/// This works because the discriminant is stored as a u32 and mirrored in the archive:
 /// ```rust
 ///rkyv_rpc::unit_enum! {
-///     /// An example unit enum
 ///     pub enum Example: u16 {
-///         0 = A,
-///         1 = B,
-///         2 = C,
+///         1000 = A,
+///         1001 = B,
+///         1002 = C,
 ///     }
 /// }
 /// ```
@@ -239,7 +257,9 @@ macro_rules! unit_enum {
         $vis:vis enum $name:ident: $repr:ty {
             $($(#[$variant_meta:meta])* $code:literal = $variant:ident,)*
         }
-    ) => {paste::paste! {
+    ) => {$crate::paste::paste! {
+        use [<$name:snake _impl>]::{$name, [<Archived $name>]};
+
         mod [<$name:snake _impl>] {
             $(#[$meta])*
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,6 +270,7 @@ macro_rules! unit_enum {
 
             use $crate::rkyv::{Archive, Serialize, Deserialize, Portable};
             use $crate::rkyv::place::{Place, Initialized};
+            use $crate::rkyv::traits::CopyOptimization;
             use $crate::rkyv::bytecheck::{CheckBytes, InvalidEnumDiscriminantError};
             use $crate::rkyv::rancor::{Fallible, Source};
 
@@ -273,6 +294,10 @@ macro_rules! unit_enum {
             impl Archive for $name {
                 type Archived = [<Archived $name>];
                 type Resolver = ();
+
+                const COPY_OPTIMIZATION: CopyOptimization<Self> = unsafe {
+                    CopyOptimization::enable()
+                };
 
                 #[inline]
                 fn resolve(&self, _: Self::Resolver, out: Place<Self::Archived>) {
