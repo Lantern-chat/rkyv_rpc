@@ -254,11 +254,15 @@ macro_rules! tuple_enum {
 ///     }
 /// }
 /// ```
+///
+/// This macro also accepts a `pub enum Test: u16 = Variant` form to specify a default variant to use when
+/// an unknown discriminant is encountered during deserialization. This can be useful for backwards compatibility.
+/// However, this means any unknown discriminants pass validation checks.
 #[macro_export]
 macro_rules! unit_enum {
     (
         $(#[$meta:meta])*
-        $vis:vis enum $name:ident: $repr:ty {
+        $vis:vis enum $name:ident: $repr:ty $(= $unknown:ident)? {
             $($(#[$variant_meta:meta])* $code:literal = $variant:ident,)*
         }
     ) => {$crate::paste::paste! {
@@ -323,6 +327,7 @@ macro_rules! unit_enum {
                 fn deserialize(&self, _: &mut D) -> Result<$name, D::Error> {
                     Ok(match *self {
                         $(<[<Archived $name>]>::$variant => $name::$variant,)*
+                        $(_ => $name::$unknown,)?
                     })
                 }
             }
@@ -335,6 +340,8 @@ macro_rules! unit_enum {
                 unsafe fn check_bytes(value: *const Self, _: &mut C) -> Result<(), <C as Fallible>::Error> {
                     Ok(match *value.cast::<$crate::__rkyv_rpc_helper!(@CAST $repr)>() {
                         $([<Archived $name>]::[<$variant Discriminant>] => (),)*
+                        $(_ => { _ = $name::$unknown; })?
+
                         invalid_discriminant => return Err(<<C as Fallible>::Error as Source>::new(InvalidEnumDiscriminantError {
                             enum_name: stringify!([<Archived $name>]),
                             invalid_discriminant,
