@@ -1,7 +1,4 @@
-#[doc(hidden)]
-pub use bitflags::bitflags;
-
-/// Drop-in replacement for the [`bitflags!`] macro that generates safe `rkyv` compatible bitflags.
+/// Drop-in replacement for the [`bitflags!`](crate::og_bitflags::bitflags!) macro that generates safe `rkyv` compatible bitflags.
 ///
 /// [Archive](rkyv::Archive), [Serialize](rkyv::Serialize), and [Deserialize](rkyv::Deserialize)
 /// implementations are generated for the bitflags type.
@@ -11,8 +8,8 @@ pub use bitflags::bitflags;
 ///
 /// # Example
 /// ```rust
-/// // use the same syntax as the bitflags! macro
-/// rkyv_rpc::rkyv_bitflags! {
+/// // use the same syntax as the original bitflags! macro
+/// rkyv_rpc::bitflags! {
 ///     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 ///     pub struct ExampleBitflags: u16 {
 ///         const A = 0;
@@ -22,7 +19,7 @@ pub use bitflags::bitflags;
 /// }
 /// ```
 #[macro_export]
-macro_rules! rkyv_bitflags {
+macro_rules! bitflags {
     (
         $(#[$outer:meta])*
         $vis:vis struct $BitFlags:ident: $T:ty {
@@ -34,7 +31,7 @@ macro_rules! rkyv_bitflags {
 
         $($t:tt)*
     ) => {
-        $crate::bitflags::bitflags! {
+        $crate::og_bitflags::bitflags! {
             $(#[$outer])*
             $vis struct $BitFlags: $T {
                 $(
@@ -44,8 +41,8 @@ macro_rules! rkyv_bitflags {
             }
         }
 
-        $crate::rkyv_bitflags!(@RKYV_ONLY $vis $BitFlags: $T);
-        $crate::rkyv_bitflags!($($t)*);
+        $crate::bitflags!(@RKYV_ONLY $vis $BitFlags: $T);
+        $crate::bitflags!($($t)*);
     };
 
     (
@@ -59,7 +56,7 @@ macro_rules! rkyv_bitflags {
 
         $($t:tt)*
     ) => {
-        $crate::bitflags::bitflags! {
+        $crate::og_bitflags::bitflags! {
             $(#[$outer])*
             impl $BitFlags: $T {
                 $(
@@ -69,8 +66,8 @@ macro_rules! rkyv_bitflags {
             }
         }
 
-        $crate::rkyv_bitflags!(@RKYV_ONLY $vis $BitFlags: $T);
-        $crate::rkyv_bitflags!($($t)*);
+        $crate::bitflags!(@RKYV_ONLY $vis $BitFlags: $T);
+        $crate::bitflags!($($t)*);
     };
 
     (@RKYV_ONLY $vis:vis $name:ident:$ty:ty) => {$crate::paste::paste! {
@@ -140,6 +137,8 @@ macro_rules! rkyv_bitflags {
 
             impl [<Archived $name>] {
                 /// Converts this archived bitflags to the native bitflags type, truncating any extra bits.
+                ///
+                #[doc = "See [`" $name "::from_bits_truncate`] for more information."]
                 #[inline]
                 pub const fn to_native_truncate(&self) -> $name {
                     $name::from_bits_truncate(self.0.to_native())
@@ -147,18 +146,30 @@ macro_rules! rkyv_bitflags {
 
                 /// Converts this archived bitflags to the native bitflags type, retaining all bits, even
                 /// if they are not part of the bitflags.
+                ///
+                #[doc = "See [`" $name "::from_bits_retain`] for more information."]
                 #[inline]
                 pub const fn to_native_retain(&self) -> $name {
                     $name::from_bits_retain(self.0.to_native())
                 }
 
+                /// Converts the native bitflags type to an archived bitflags.
+                #[inline]
+                pub const fn from_native(native: $name) -> Self {
+                    Self(<Archived<$ty>>::from_native(native.bits()))
+                }
+
                 /// Check if the archived bitflags contains all the given bitflags.
+                ///
+                #[doc = "See [`" $name "::contains`] for more information."]
                 #[inline]
                 pub const fn contains(&self, other: $name) -> bool {
                     self.to_native_retain().contains(other)
                 }
 
                 /// Check if the archived bitflags intersect with any of the given bitflags.
+                ///
+                #[doc = "See [`" $name "::intersects`] for more information."]
                 #[inline]
                 pub const fn intersects(&self, other: $name) -> bool {
                     self.to_native_retain().intersects(other)

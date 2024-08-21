@@ -12,7 +12,11 @@ pub extern crate rkyv;
 pub mod codec;
 
 #[cfg(feature = "bitflags")]
-pub mod bitflags;
+mod bitflags;
+
+#[cfg(feature = "bitflags")]
+#[doc(hidden)]
+pub extern crate bitflags as og_bitflags;
 
 #[doc(hidden)]
 pub mod private {

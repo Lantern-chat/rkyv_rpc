@@ -7,14 +7,17 @@ rkyv_rpc
 
 # Synopsis
 
-This crate provides a macro to declare an enum specifically to carry RPC commands in such a way as to ensure cross-endian and backwards compatibility.
+This crate provides useful macros and utilities for working with rkyv objects in a networked environment, such as RPC commands. It helps
+to ensure that RPC commands and other data are cross-endian and **backwards compatible**.
 
-Unlike `#[derive(rkyv::Archive)]`, this implementation create a custom enum discriminator for which the bytes are mirrored, creating the same representation regardless
-or endianness. Furthermore, this allows for discriminators larger than 1 byte, allowing one to space out custom discriminator values to allow for older software
+Unlike `#[derive(rkyv::Archive)]`, enums created by this implementation use a custom enum discriminator for which the bytes are mirrored,
+resulting in the same representation regardless of endianness. Furthermore, this allows for discriminators larger than 1 byte,
+allowing one to space out custom discriminator values to allow for older software
 to still accept the same data structures while gracefully failing to recognize newer discriminants.
 
-Furthermore, a framed codec is provided for safely reading and writing binary streams of rkyv objects.
+A framed codec is also provided for safely reading and writing binary streams of rkyv objects.
 
 # Cargo Features
 * `codec` (default) - Enables the `Encoder`/`Decoder` implementations to write/read rkyv objects to byte buffers and `AsyncWrite`/`AsyncRead` streams via tokio's `Framed`
 * `unaligned` - Enable unaligned accesses by default for rkyv. This saves an extra clone of the incoming bytes before decoding.
+* `bitflags` - Enable a macro to wrap generation of bitflags to be used safely with `rkyv`.
