@@ -94,7 +94,7 @@ macro_rules! tuple_enum {
 
             $(#[$meta])*
             #[repr($repr)]
-            $vis enum $name {
+            pub enum $name {
                 $($(#[$variant_meta])* $variant(Box<$ty>) = $code,)*
             }
 
@@ -266,13 +266,13 @@ macro_rules! unit_enum {
             $($(#[$variant_meta:meta])* $code:literal = $variant:ident,)*
         }
     ) => {$crate::paste::paste! {
-        use [<$name:snake _impl>]::{$name, [<Archived $name>]};
+        $vis use [<$name:snake _impl>]::{$name, [<Archived $name>]};
 
         mod [<$name:snake _impl>] {
             $(#[$meta])*
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
             #[repr($repr)]
-            $vis enum $name {
+            pub enum $name {
                 $($(#[$variant_meta])* $variant = $code,)*
             }
 
