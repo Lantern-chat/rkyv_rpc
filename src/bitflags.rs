@@ -1,4 +1,4 @@
-/// Drop-in replacement for the [`bitflags!`](crate::og_bitflags::bitflags!) macro that generates safe `rkyv` compatible bitflags.
+/// (Nearly) Drop-in replacement for the [`bitflags!`](crate::og_bitflags::bitflags!) macro that generates safe `rkyv` compatible bitflags.
 ///
 /// [Archive](rkyv::Archive), [Serialize](rkyv::Serialize), and [Deserialize](rkyv::Deserialize)
 /// implementations are generated for the bitflags type.
@@ -47,7 +47,7 @@ macro_rules! bitflags {
 
     (
         $(#[$outer:meta])*
-        impl $BitFlags:ident: $T:ty {
+        $vis:vis impl $BitFlags:ident: $T:ty {
             $(
                 $(#[$inner:ident $($args:tt)*])*
                 const $Flag:tt = $value:expr;
@@ -70,11 +70,11 @@ macro_rules! bitflags {
         $crate::bitflags!($($t)*);
     };
 
-    (@RKYV_ONLY $vis:vis $name:ident:$ty:ty) => {$crate::paste::paste! {
-        #[doc = "Archived version of [`" $name "`]."]
+    (@RKYV_ONLY $vis:vis $BitFlags:ident:$T:ty) => {$crate::paste::paste! {
+        #[doc = "Archived version of [`" $BitFlags "`], automatically made endian-agnostic."]
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[repr(transparent)]
-        $vis struct [<Archived $name>](pub $crate::rkyv::Archived<$ty>);
+        $vis struct [<Archived $BitFlags>](pub $crate::rkyv::Archived<$T>);
 
         const _: () = {
             use $crate::rkyv::{Archive, Archived, Serialize, Deserialize, Portable};
@@ -84,95 +84,127 @@ macro_rules! bitflags {
             use $crate::rkyv::rancor::{Fallible, Source};
 
             const fn assert_trivial<T: Portable + Initialized>() {}
-            assert_trivial::<Archived<$ty>>();
+            assert_trivial::<Archived<$T>>();
 
-            unsafe impl Portable for [<Archived $name>] {}
-            unsafe impl Initialized for [<Archived $name>] {}
+            unsafe impl Portable for [<Archived $BitFlags>] {}
+            unsafe impl Initialized for [<Archived $BitFlags>] {}
 
-            impl Archive for $name {
-                type Archived = [<Archived $name>];
+            impl Archive for $BitFlags {
+                type Archived = [<Archived $BitFlags>];
                 type Resolver = ();
 
                 const COPY_OPTIMIZATION: CopyOptimization<Self> = unsafe {
-                    CopyOptimization::enable_if(<Archived<$ty>>::COPY_OPTIMIZATION.is_enabled())
+                    CopyOptimization::enable_if(<Archived<$T>>::COPY_OPTIMIZATION.is_enabled())
                 };
 
                 #[inline]
                 fn resolve(&self, _: (), out: Place<Self::Archived>) {
-                    out.write([<Archived $name>](<Archived<$ty>>::from_native(self.bits())))
+                    out.write([<Archived $BitFlags>](<Archived<$T>>::from_native(self.bits())))
                 }
             }
 
-            impl<S: Fallible + ?Sized> Serialize<S> for $name {
+            impl<S: Fallible + ?Sized> Serialize<S> for $BitFlags {
                 #[inline]
                 fn serialize(&self, _: &mut S) -> Result<(), S::Error> {
                     Ok(())
                 }
             }
 
-            impl<D: Fallible + ?Sized> Deserialize<$name, D> for [<Archived $name>] {
+            impl<D: Fallible + ?Sized> Deserialize<$BitFlags, D> for [<Archived $BitFlags>] {
                 #[inline]
-                fn deserialize(&self, _: &mut D) -> Result<$name, D::Error> {
+                fn deserialize(&self, _: &mut D) -> Result<$BitFlags, D::Error> {
                     Ok(self.to_native_truncate())
                 }
             }
 
-            unsafe impl<C> CheckBytes<C> for [<Archived $name>]
+            unsafe impl<C> CheckBytes<C> for [<Archived $BitFlags>]
             where
                 C: Fallible + ?Sized,
                 <C as Fallible>::Error: Source,
             {
                 #[inline]
                 unsafe fn check_bytes(value: *const Self, ctx: &mut C) -> Result<(), <C as Fallible>::Error> {
-                    <Archived<$ty>>::check_bytes(value.cast(), ctx)
+                    <Archived<$T>>::check_bytes(value.cast(), ctx)
                 }
             }
 
-            impl From<[<Archived $name>]> for $name {
+            impl From<[<Archived $BitFlags>]> for $BitFlags {
                 #[inline]
-                fn from(archived: [<Archived $name>]) -> Self {
+                fn from(archived: [<Archived $BitFlags>]) -> Self {
                     archived.to_native_truncate()
                 }
             }
 
-            impl [<Archived $name>] {
+            impl [<Archived $BitFlags>] {
+                /// Converts this archived bitflags to the native bitflags type, returning `None` if any
+                /// bits are set that are not part of the bitflags.
+                ///
+                #[doc = "See [`" $BitFlags "::from_bits`] for more information."]
+                #[inline]
+                pub const fn to_native(&self) -> Option<$BitFlags> {
+                    $BitFlags::from_bits(self.bits())
+                }
+
                 /// Converts this archived bitflags to the native bitflags type, truncating any extra bits.
                 ///
-                #[doc = "See [`" $name "::from_bits_truncate`] for more information."]
+                #[doc = "See [`" $BitFlags "::from_bits_truncate`] for more information."]
                 #[inline]
-                pub const fn to_native_truncate(&self) -> $name {
-                    $name::from_bits_truncate(self.0.to_native())
+                pub const fn to_native_truncate(&self) -> $BitFlags {
+                    $BitFlags::from_bits_truncate(self.bits())
                 }
 
                 /// Converts this archived bitflags to the native bitflags type, retaining all bits, even
                 /// if they are not part of the bitflags.
                 ///
-                #[doc = "See [`" $name "::from_bits_retain`] for more information."]
+                #[doc = "See [`" $BitFlags "::from_bits_retain`] for more information."]
                 #[inline]
-                pub const fn to_native_retain(&self) -> $name {
-                    $name::from_bits_retain(self.0.to_native())
+                pub const fn to_native_retain(&self) -> $BitFlags {
+                    $BitFlags::from_bits_retain(self.bits())
                 }
 
                 /// Converts the native bitflags type to an archived bitflags.
                 #[inline]
-                pub const fn from_native(native: $name) -> Self {
-                    Self(<Archived<$ty>>::from_native(native.bits()))
+                pub const fn from_native(native: $BitFlags) -> Self {
+                    Self(<Archived<$T>>::from_native(native.bits()))
                 }
 
                 /// Check if the archived bitflags contains all the given bitflags.
                 ///
-                #[doc = "See [`" $name "::contains`] for more information."]
+                #[doc = "See [`" $BitFlags "::contains`] for more information."]
                 #[inline]
-                pub const fn contains(&self, other: $name) -> bool {
+                pub const fn contains(&self, other: $BitFlags) -> bool {
                     self.to_native_retain().contains(other)
                 }
 
                 /// Check if the archived bitflags intersect with any of the given bitflags.
                 ///
-                #[doc = "See [`" $name "::intersects`] for more information."]
+                #[doc = "See [`" $BitFlags "::intersects`] for more information."]
                 #[inline]
-                pub const fn intersects(&self, other: $name) -> bool {
+                pub const fn intersects(&self, other: $BitFlags) -> bool {
                     self.to_native_retain().intersects(other)
+                }
+
+                /// Whether all bits in this flags value are unset.
+                #[inline]
+                pub const fn is_empty(&self) -> bool {
+                    self.to_native_retain().is_empty()
+                }
+
+                /// Whether all known bits in this flags value are set.
+                #[inline]
+                pub const fn is_all(&self) -> bool {
+                    self.to_native_retain().is_all()
+                }
+
+                /// Get the underlying raw bits value.
+                ///
+                /// Note that this may contain bits that are not part of the original bitflags,
+                /// if serialized with a different version of the bitflags. Use [`to_native`](Self::to_native) or
+                /// [`to_native_truncate`](Self::to_native_truncate) to convert to the native bitflags type
+                /// without extra bits.
+                #[inline]
+                pub const fn bits(&self) -> $T {
+                    self.0.to_native()
                 }
             }
         };
