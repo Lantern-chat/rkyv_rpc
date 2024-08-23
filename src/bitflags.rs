@@ -71,7 +71,8 @@ macro_rules! bitflags {
     };
 
     (@RKYV_ONLY $vis:vis $BitFlags:ident:$T:ty) => {$crate::paste::paste! {
-        #[doc = "Archived version of [`" $BitFlags "`], automatically made endian-agnostic."]
+        #[doc = "Archived version of [`" $BitFlags "`], automatically made endian-agnostic.\n"]
+        #[doc = "When comparing with the native bitflags, the archived bitflags will truncate any extra bits."]
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[repr(transparent)]
         $vis struct [<Archived $BitFlags>](pub $crate::rkyv::Archived<$T>);
@@ -205,6 +206,20 @@ macro_rules! bitflags {
                 #[inline]
                 pub const fn bits(&self) -> $T {
                     self.0.to_native()
+                }
+            }
+
+            impl PartialEq<$BitFlags> for [<Archived $BitFlags>] {
+                #[inline]
+                fn eq(&self, other: &$BitFlags) -> bool {
+                    self.to_native_truncate() == *other
+                }
+            }
+
+            impl PartialEq<[<Archived $BitFlags>]> for $BitFlags {
+                #[inline]
+                fn eq(&self, other: &[<Archived $BitFlags>]) -> bool {
+                    *self == other.to_native_truncate()
                 }
             }
         };
