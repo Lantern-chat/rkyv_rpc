@@ -35,3 +35,6 @@ default-features = true
 [dev-dependencies]
 futures-util = { version = "0.3.30", features = ["sink"] }
 tokio = { version = "1", features = ["full"] }
+
+[patch.crates-io]
+rkyv = { git = "https://github.com/Lantern-chat/rkyv" }

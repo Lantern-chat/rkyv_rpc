@@ -79,16 +79,16 @@ macro_rules! bitflags {
 
         const _: () = {
             use $crate::rkyv::{Archive, Archived, Serialize, Deserialize, Portable};
-            use $crate::rkyv::place::{Place, Initialized};
-            use $crate::rkyv::traits::CopyOptimization;
+            use $crate::rkyv::place::Place;
+            use $crate::rkyv::traits::{CopyOptimization, NoUndef};
             use $crate::rkyv::bytecheck::CheckBytes;
             use $crate::rkyv::rancor::{Fallible, Source};
 
-            const fn assert_trivial<T: Portable + Initialized>() {}
+            const fn assert_trivial<T: Portable + NoUndef>() {}
             assert_trivial::<Archived<$T>>();
 
             unsafe impl Portable for [<Archived $BitFlags>] {}
-            unsafe impl Initialized for [<Archived $BitFlags>] {}
+            unsafe impl NoUndef for [<Archived $BitFlags>] {}
 
             impl Archive for $BitFlags {
                 type Archived = [<Archived $BitFlags>];
@@ -100,7 +100,7 @@ macro_rules! bitflags {
 
                 #[inline]
                 fn resolve(&self, _: (), out: Place<Self::Archived>) {
-                    out.write([<Archived $BitFlags>](<Archived<$T>>::from_native(self.bits())))
+                    out.write([<Archived $BitFlags>]::from_native(*self))
                 }
             }
 
@@ -166,7 +166,7 @@ macro_rules! bitflags {
                 /// Converts the native bitflags type to an archived bitflags.
                 #[inline]
                 pub const fn from_native(native: $BitFlags) -> Self {
-                    Self(<Archived<$T>>::from_native(native.bits()))
+                    Self($crate::__rkyv_rpc_helper!(@FROM_NATIVE $T => native.bits()))
                 }
 
                 /// Check if the archived bitflags contains all the given bitflags.
@@ -205,7 +205,7 @@ macro_rules! bitflags {
                 /// without extra bits.
                 #[inline]
                 pub const fn bits(&self) -> $T {
-                    self.0.to_native()
+                    $crate::__rkyv_rpc_helper!(@TO_NATIVE $T => self.0)
                 }
             }
 

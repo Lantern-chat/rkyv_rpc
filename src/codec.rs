@@ -37,8 +37,6 @@ pub struct CheckedArchive<T> {
 
     #[cfg(feature = "unaligned")]
     bytes: tokio_util::bytes::Bytes,
-
-    pos: usize,
 }
 
 impl<T> Deref for CheckedArchive<T>
@@ -50,7 +48,7 @@ where
     fn deref(&self) -> &Self::Target {
         // SAFETY: This is safe because the buffer is aligned and the root type
         // was checked when when it was decoded.
-        unsafe { rkyv::api::access_pos_unchecked(&self.bytes, self.pos) }
+        unsafe { rkyv::api::access_unchecked(&self.bytes) }
     }
 }
 
@@ -146,19 +144,16 @@ where
         }
     };
 
-    let pos = rkyv::api::root_position::<Archived<T>>(bytes.len());
-
     // rkyv::access but without the actual access
     rkyv::api::check_pos_with_context::<Archived<T>, _, RancorError>(
         &bytes,
-        pos,
+        rkyv::api::root_position::<Archived<T>>(bytes.len()),
         &mut Validator::new(ArchiveValidator::new(&bytes), SharedValidator::new()),
     )?;
 
     Ok(Some(CheckedArchive {
         _marker: PhantomData,
         bytes,
-        pos,
     }))
 }
 
