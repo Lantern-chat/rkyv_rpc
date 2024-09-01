@@ -680,3 +680,67 @@ macro_rules! impl_rkyv_for_1byte_pod {
         };
     };
 }
+
+use rkyv::{
+    de::{Pool, Unpool},
+    rancor::{Error, Failure, Strategy},
+    Archive, Archived, Deserialize,
+};
+
+/// Extension trait for [`Archived`] types to provide simpler deserialization methods.
+pub trait DeserializeExt<T: Archive> {
+    /// Deserialize the archived value with a simple deserialization strategy, which duplicates
+    /// deserializations of the same shared pointer and throws away errors.
+    ///
+    /// Use this for simpler "POD"-like types that don't need to cache shared pointers.
+    fn simple_deserialize(&self) -> Result<T, Failure>
+    where
+        Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>;
+
+    /// Deserialize the archived value with a full deserialization strategy, which caches shared
+    /// pointers and returns full errors.
+    ///
+    /// Use this for more complex types that need to cache shared pointers.
+    fn full_deserialize(&self) -> Result<T, Error>
+    where
+        Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>;
+}
+
+impl<T: Archive> DeserializeExt<T> for Archived<T> {
+    #[inline]
+    fn simple_deserialize(&self) -> Result<T, Failure>
+    where
+        Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>,
+    {
+        self.deserialize(Strategy::wrap(&mut Unpool))
+    }
+
+    fn full_deserialize(&self) -> Result<T, Error>
+    where
+        Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>,
+    {
+        self.deserialize(Strategy::wrap(&mut Pool::new()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DeserializeExt;
+    use rkyv::Archived;
+
+    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+    pub struct Test {
+        x: String,
+    }
+
+    #[test]
+    fn test_simple_de() {
+        let test = Test {
+            x: "hello".to_string(),
+        };
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&test).unwrap();
+        let archived = unsafe { rkyv::access_unchecked::<Archived<Test>>(&bytes) };
+        let deserialized: Test = archived.simple_deserialize().unwrap();
+        assert_eq!(test.x, deserialized.x);
+    }
+}
