@@ -472,14 +472,12 @@ macro_rules! unit_enum {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        #[repr($repr)]
+        #[repr(align(1), $repr)]
         $vis enum $name {
             $($(#[$variant_meta])* $variant = $code,)*
         }
 
         const _: () = {
-
-
             use $crate::rkyv::{Archive, Serialize, Deserialize, Portable};
             use $crate::rkyv::place::Place;
             use $crate::rkyv::traits::{NoUndef, CopyOptimization};
