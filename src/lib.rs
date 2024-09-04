@@ -691,7 +691,7 @@ pub trait DeserializeExt<T: Archive> {
     /// deserializations of the same shared pointer and throws away errors.
     ///
     /// Use this for simpler "POD"-like types that don't need to cache shared pointers.
-    fn simple_deserialize(&self) -> Result<T, Failure>
+    fn deserialize_simple(&self) -> Result<T, Failure>
     where
         Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>;
 
@@ -699,21 +699,21 @@ pub trait DeserializeExt<T: Archive> {
     /// pointers and returns full errors.
     ///
     /// Use this for more complex types that need to cache shared pointers.
-    fn full_deserialize(&self) -> Result<T, Error>
+    fn deserialize_full(&self) -> Result<T, Error>
     where
         Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>;
 }
 
 impl<T: Archive> DeserializeExt<T> for Archived<T> {
     #[inline]
-    fn simple_deserialize(&self) -> Result<T, Failure>
+    fn deserialize_simple(&self) -> Result<T, Failure>
     where
         Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>,
     {
         self.deserialize(Strategy::wrap(&mut Unpool))
     }
 
-    fn full_deserialize(&self) -> Result<T, Error>
+    fn deserialize_full(&self) -> Result<T, Error>
     where
         Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>,
     {
@@ -738,7 +738,7 @@ mod tests {
         };
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&test).unwrap();
         let archived = unsafe { rkyv::access_unchecked::<Archived<Test>>(&bytes) };
-        let deserialized: Test = archived.simple_deserialize().unwrap();
+        let deserialized: Test = archived.deserialize_simple().unwrap();
         assert_eq!(test.x, deserialized.x);
     }
 }
