@@ -693,7 +693,7 @@ pub trait DeserializeExt<T: Archive> {
     /// Use this for simpler "POD"-like types that don't need to cache shared pointers.
     fn deserialize_simple(&self) -> Result<T, Failure>
     where
-        Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>;
+        Archived<T>: Deserialize<T, Strategy<Unpool, Failure>>;
 
     /// Deserialize the archived value with a full deserialization strategy, which caches shared
     /// pointers and returns full errors.
@@ -701,21 +701,21 @@ pub trait DeserializeExt<T: Archive> {
     /// Use this for more complex types that need to cache shared pointers.
     fn deserialize_full(&self) -> Result<T, Error>
     where
-        Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>;
+        Archived<T>: Deserialize<T, Strategy<Pool, Error>>;
 }
 
 impl<T: Archive> DeserializeExt<T> for Archived<T> {
     #[inline]
     fn deserialize_simple(&self) -> Result<T, Failure>
     where
-        Archived<T>: rkyv::Deserialize<T, Strategy<Unpool, Failure>>,
+        Archived<T>: Deserialize<T, Strategy<Unpool, Failure>>,
     {
         self.deserialize(Strategy::wrap(&mut Unpool))
     }
 
     fn deserialize_full(&self) -> Result<T, Error>
     where
-        Archived<T>: rkyv::Deserialize<T, Strategy<Pool, Error>>,
+        Archived<T>: Deserialize<T, Strategy<Pool, Error>>,
     {
         self.deserialize(Strategy::wrap(&mut Pool::new()))
     }
