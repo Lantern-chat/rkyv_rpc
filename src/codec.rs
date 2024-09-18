@@ -185,7 +185,7 @@ where
 
 impl<T> Encoder<&T> for RkyvCodec<T>
 where
-    T: for<'a> Serialize<HighSerializer<'a, Vec<u8>, ArenaHandle<'a>, RancorError>>,
+    T: for<'a> Serialize<HighSerializer<Vec<u8>, ArenaHandle<'a>, RancorError>>,
 {
     type Error = Error;
 
